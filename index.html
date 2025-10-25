@@ -131,7 +131,7 @@
         }
         .time-marker {
             min-width: 60px;
-            text-align: left;
+            text-align: center;
             font-size: 12px;
         }
         .ready-queue {
@@ -139,12 +139,19 @@
             padding: 20px;
             background: white;
             margin-bottom: 20px;
+            min-height: 100px;
         }
-        .queue-item {
-            padding: 8px;
+        .queue-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .queue-process {
             border: 1px solid #333;
-            margin-bottom: 5px;
-            background: #f9f9f9;
+            padding: 10px 15px;
+            text-align: center;
+            font-weight: bold;
+            background: #f0f0f0;
         }
         .status {
             margin-bottom: 20px;
@@ -152,6 +159,16 @@
             background: #f0f0f0;
             border: 1px solid #ddd;
             border-radius: 4px;
+        }
+        .averages {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .averages strong {
+            margin-right: 20px;
         }
         table {
             width: 100%;
@@ -249,11 +266,18 @@
                     <th>Arrival Time (ms)</th>
                     <th>Burst Time (ms)</th>
                     <th id="priorityHeader" class="hidden">Priority</th>
-                    <th>Remaining Time (ms)</th>
+                    <th>Completion Time (ms)</th>
+                    <th>Turnaround Time (ms)</th>
+                    <th>Waiting Time (ms)</th>
                 </tr>
             </thead>
             <tbody id="processTableBody"></tbody>
         </table>
+
+        <div class="averages">
+            <strong>Average Waiting Time:</strong> <span id="avgWaitingTime">-</span> ms
+            <strong>Average Turnaround Time:</strong> <span id="avgTurnaroundTime">-</span> ms
+        </div>
 
         <button onclick="showEditModal()">Edit Process Parameters</button>
     </div>
@@ -337,7 +361,10 @@
                     arrival: arrival,
                     burst: burst,
                     priority: priority,
-                    remaining: burst
+                    remaining: burst,
+                    completion: 0,
+                    turnaround: 0,
+                    waiting: 0
                 });
             }
             
@@ -346,6 +373,7 @@
             }
             
             ganttChart = computeSchedule();
+            calculateMetrics();
             currentTick = 0;
             
             closeModal();
@@ -480,19 +508,33 @@
             return schedule;
         }
 
+        function calculateMetrics() {
+            for (const p of processes) {
+                let lastExecution = -1;
+                for (let i = ganttChart.length - 1; i >= 0; i--) {
+                    if (ganttChart[i].process === p.id) {
+                        lastExecution = ganttChart[i].time + 1;
+                        break;
+                    }
+                }
+                
+                p.completion = lastExecution;
+                p.turnaround = p.completion - p.arrival;
+                p.waiting = p.turnaround - p.burst;
+            }
+        }
+
         function updateDisplay() {
             document.getElementById('currentTime').textContent = currentTick;
             
-            // Update Gantt Chart
             const ganttHTML = renderGanttChart();
             document.getElementById('ganttDisplay').innerHTML = ganttHTML;
             
-            // Update Ready Queue
             const readyQueue = getReadyQueue();
             document.getElementById('readyQueueDisplay').innerHTML = readyQueue;
             
-            // Update Process Table
             updateProcessTable();
+            updateAverages();
         }
 
         function renderGanttChart() {
@@ -530,7 +572,6 @@
         function getReadyQueue() {
             const currentProcesses = processes.map(p => ({...p}));
             
-            // Calculate remaining time based on what's been executed
             for (let i = 0; i <= currentTick && i < ganttChart.length; i++) {
                 const executed = ganttChart[i].process;
                 const proc = currentProcesses.find(p => p.id === executed);
@@ -542,27 +583,24 @@
             );
             
             if (ready.length === 0) {
-                return 'Ready queue empty';
+                return '<div>Ready queue empty</div>';
             }
             
-            let html = '';
+            let html = '<div class="queue-row">';
             for (const p of ready) {
-                html += `<div class="queue-item">${p.id} (Arrival: ${p.arrival}ms, Remaining: ${p.remaining}ms)</div>`;
+                html += `<div class="queue-process">${p.id}</div>`;
             }
+            html += '</div>';
             return html;
         }
 
         function updateProcessTable() {
-            const currentProcesses = processes.map(p => ({...p}));
-            
-            for (let i = 0; i <= currentTick && i < ganttChart.length; i++) {
-                const executed = ganttChart[i].process;
-                const proc = currentProcesses.find(p => p.id === executed);
-                if (proc) proc.remaining--;
-            }
-            
             let html = '';
-            for (const p of currentProcesses) {
+            for (const p of processes) {
+                const completionDisplay = (currentTick >= ganttChart.length - 1 || currentTick >= p.completion - 1) ? p.completion : '-';
+                const turnaroundDisplay = (currentTick >= ganttChart.length - 1 || currentTick >= p.completion - 1) ? p.turnaround : '-';
+                const waitingDisplay = (currentTick >= ganttChart.length - 1 || currentTick >= p.completion - 1) ? p.waiting : '-';
+                
                 html += '<tr>';
                 html += `<td>${p.id}</td>`;
                 html += `<td>${p.arrival}</td>`;
@@ -570,10 +608,28 @@
                 if (currentAlgorithm.includes('priority')) {
                     html += `<td>${p.priority}</td>`;
                 }
-                html += `<td>${Math.max(0, p.remaining)}</td>`;
+                html += `<td>${completionDisplay}</td>`;
+                html += `<td>${turnaroundDisplay}</td>`;
+                html += `<td>${waitingDisplay}</td>`;
                 html += '</tr>';
             }
             document.getElementById('processTableBody').innerHTML = html;
+        }
+
+        function updateAverages() {
+            if (currentTick >= ganttChart.length - 1) {
+                const totalWaiting = processes.reduce((sum, p) => sum + p.waiting, 0);
+                const totalTurnaround = processes.reduce((sum, p) => sum + p.turnaround, 0);
+                
+                const avgWaiting = (totalWaiting / processes.length).toFixed(2);
+                const avgTurnaround = (totalTurnaround / processes.length).toFixed(2);
+                
+                document.getElementById('avgWaitingTime').textContent = avgWaiting;
+                document.getElementById('avgTurnaroundTime').textContent = avgTurnaround;
+            } else {
+                document.getElementById('avgWaitingTime').textContent = '-';
+                document.getElementById('avgTurnaroundTime').textContent = '-';
+            }
         }
 
         function nextTick() {
