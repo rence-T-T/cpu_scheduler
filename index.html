@@ -153,6 +153,11 @@
             font-weight: bold;
             background: #f0f0f0;
         }
+        .queue-process.executed {
+            text-decoration: line-through;
+            background: #d0d0d0;
+            color: #888;
+        }
         .status {
             margin-bottom: 20px;
             padding: 15px;
@@ -570,25 +575,48 @@
         }
 
         function getReadyQueue() {
-            const currentProcesses = processes.map(p => ({...p}));
+            const currentProcesses = processes.map(p => ({...p, remaining: p.burst}));
             
+            // Track which processes have been executed up to current tick
+            const executedCount = {};
             for (let i = 0; i <= currentTick && i < ganttChart.length; i++) {
                 const executed = ganttChart[i].process;
-                const proc = currentProcesses.find(p => p.id === executed);
-                if (proc) proc.remaining--;
+                if (executed !== 'idle') {
+                    executedCount[executed] = (executedCount[executed] || 0) + 1;
+                }
             }
             
-            const ready = currentProcesses.filter(p => 
-                p.arrival <= currentTick && p.remaining > 0
-            );
+            // Update remaining times
+            for (const p of currentProcesses) {
+                if (executedCount[p.id]) {
+                    p.remaining -= executedCount[p.id];
+                }
+            }
             
-            if (ready.length === 0) {
+            // Build ready queue history - processes that have arrived by current time
+            const queueHistory = [];
+            const addedToQueue = new Set();
+            
+            // Go through time tick by tick to build the queue in order
+            for (let t = 0; t <= currentTick; t++) {
+                for (const p of currentProcesses) {
+                    if (p.arrival === t && !addedToQueue.has(p.id)) {
+                        queueHistory.push(p.id);
+                        addedToQueue.add(p.id);
+                    }
+                }
+            }
+            
+            if (queueHistory.length === 0) {
                 return '<div>Ready queue empty</div>';
             }
             
             let html = '<div class="queue-row">';
-            for (const p of ready) {
-                html += `<div class="queue-process">${p.id}</div>`;
+            for (const processId of queueHistory) {
+                const proc = currentProcesses.find(p => p.id === processId);
+                const hasLeft = proc.remaining <= 0;
+                const cssClass = hasLeft ? 'queue-process executed' : 'queue-process';
+                html += `<div class="${cssClass}">${processId}</div>`;
             }
             html += '</div>';
             return html;
