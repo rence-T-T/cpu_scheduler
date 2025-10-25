@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1, h2, h3 {
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: 1px solid #333;
+            background: white;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h2 {
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .process-inputs {
+            margin-top: 20px;
+        }
+        .process-input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .process-input-row.with-priority {
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+        }
+        .hidden {
+            display: none;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .gantt-chart {
+            border: 2px solid #333;
+            padding: 20px;
+            background: white;
+            margin-bottom: 20px;
+            min-height: 150px;
+        }
+        .gantt-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .gantt-process {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            min-width: 60px;
+            background: #e0e0e0;
+        }
+        .gantt-time {
+            display: flex;
+            margin-top: 5px;
+        }
+        .time-marker {
+            min-width: 60px;
+            text-align: left;
+            font-size: 12px;
+        }
+        .ready-queue {
+            border: 2px solid #333;
+            padding: 20px;
+            background: white;
+            margin-bottom: 20px;
+        }
+        .queue-item {
+            padding: 8px;
+            border: 1px solid #333;
+            margin-bottom: 5px;
+            background: #f9f9f9;
+        }
+        .status {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #f0f0f0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="homePage" class="container">
+        <h1>CPU Scheduling Simulator</h1>
+        
+        <div class="section">
+            <h2>Non-Preemptive Scheduling</h2>
+            <div class="button-group">
+                <button onclick="openModal('fcfs')">First Come First Serve (FCFS)</button>
+                <button onclick="openModal('sjf')">Shortest Job First (SJF)</button>
+                <button onclick="openModal('priority-np')">Priority Scheduling (Non-Preemptive)</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Preemptive Scheduling</h2>
+            <div class="button-group">
+                <button onclick="openModal('rr')">Round Robin (RR)</button>
+                <button onclick="openModal('srtf')">Shortest Remaining Time First (SRTF)</button>
+                <button onclick="openModal('priority-p')">Priority Scheduling (Preemptive)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="inputModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Enter Process Details</h2>
+            
+            <div class="form-group">
+                <label for="numProcesses">Number of Processes:</label>
+                <input type="number" id="numProcesses" min="1" max="10" value="3">
+                <button onclick="generateProcessInputs()" style="margin-top: 10px;">Generate Inputs</button>
+            </div>
+
+            <div id="quantumInput" class="form-group hidden">
+                <label for="timeQuantum">Time Quantum (ms):</label>
+                <input type="number" id="timeQuantum" min="1" value="2">
+            </div>
+
+            <div id="processInputs" class="process-inputs"></div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="startSimulation()">Start Simulation</button>
+                <button onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="simulationPage" class="container hidden">
+        <h1 id="simTitle">CPU Scheduling Simulation</h1>
+        <button onclick="backToHome()">Back to Home</button>
+
+        <div class="status">
+            <strong>Current Time:</strong> <span id="currentTime">0</span> ms
+        </div>
+
+        <div class="controls">
+            <button onclick="previousTick()">◄ Previous</button>
+            <button onclick="togglePlayPause()" id="playPauseBtn">▶ Play</button>
+            <button onclick="nextTick()">Next ►</button>
+            <button onclick="resetSimulation()">Reset</button>
+        </div>
+
+        <h3>Gantt Chart</h3>
+        <div class="gantt-chart">
+            <div id="ganttDisplay"></div>
+        </div>
+
+        <h3>Ready Queue</h3>
+        <div class="ready-queue">
+            <div id="readyQueueDisplay">Ready queue empty</div>
+        </div>
+
+        <h3>Process Details</h3>
+        <table id="processTable">
+            <thead>
+                <tr>
+                    <th>Process</th>
+                    <th>Arrival Time (ms)</th>
+                    <th>Burst Time (ms)</th>
+                    <th id="priorityHeader" class="hidden">Priority</th>
+                    <th>Remaining Time (ms)</th>
+                </tr>
+            </thead>
+            <tbody id="processTableBody"></tbody>
+        </table>
+
+        <button onclick="showEditModal()">Edit Process Parameters</button>
+    </div>
+
+    <script>
+        let currentAlgorithm = '';
+        let processes = [];
+        let ganttChart = [];
+        let currentTick = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let timeQuantum = 2;
+
+        function openModal(algorithm) {
+            currentAlgorithm = algorithm;
+            document.getElementById('inputModal').style.display = 'block';
+            document.getElementById('modalTitle').textContent = getAlgorithmName(algorithm);
+            
+            if (algorithm === 'rr') {
+                document.getElementById('quantumInput').classList.remove('hidden');
+            } else {
+                document.getElementById('quantumInput').classList.add('hidden');
+            }
+            
+            generateProcessInputs();
+        }
+
+        function closeModal() {
+            document.getElementById('inputModal').style.display = 'none';
+        }
+
+        function getAlgorithmName(algo) {
+            const names = {
+                'fcfs': 'First Come First Serve',
+                'sjf': 'Shortest Job First',
+                'priority-np': 'Priority Scheduling (Non-Preemptive)',
+                'rr': 'Round Robin',
+                'srtf': 'Shortest Remaining Time First',
+                'priority-p': 'Priority Scheduling (Preemptive)'
+            };
+            return names[algo];
+        }
+
+        function generateProcessInputs() {
+            const num = parseInt(document.getElementById('numProcesses').value);
+            const container = document.getElementById('processInputs');
+            const needsPriority = currentAlgorithm.includes('priority');
+            
+            let html = '<h3>Process Details</h3>';
+            html += '<div class="process-input-row" style="font-weight: bold;">';
+            html += '<div>Process</div><div>Arrival (ms)</div><div>Burst (ms)</div>';
+            if (needsPriority) html += '<div>Priority</div>';
+            html += '</div>';
+            
+            for (let i = 0; i < num; i++) {
+                html += `<div class="process-input-row ${needsPriority ? 'with-priority' : ''}">`;
+                html += `<div>P${i}</div>`;
+                html += `<input type="number" id="arrival${i}" min="0" value="${i}" placeholder="Arrival">`;
+                html += `<input type="number" id="burst${i}" min="1" value="${Math.floor(Math.random() * 5) + 1}" placeholder="Burst">`;
+                if (needsPriority) {
+                    html += `<input type="number" id="priority${i}" min="0" value="${i}" placeholder="Priority">`;
+                }
+                html += '</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+
+        function startSimulation() {
+            const num = parseInt(document.getElementById('numProcesses').value);
+            processes = [];
+            
+            for (let i = 0; i < num; i++) {
+                const arrival = parseInt(document.getElementById(`arrival${i}`).value);
+                const burst = parseInt(document.getElementById(`burst${i}`).value);
+                const priority = currentAlgorithm.includes('priority') ? 
+                    parseInt(document.getElementById(`priority${i}`).value) : 0;
+                
+                processes.push({
+                    id: `P${i}`,
+                    arrival: arrival,
+                    burst: burst,
+                    priority: priority,
+                    remaining: burst
+                });
+            }
+            
+            if (currentAlgorithm === 'rr') {
+                timeQuantum = parseInt(document.getElementById('timeQuantum').value);
+            }
+            
+            ganttChart = computeSchedule();
+            currentTick = 0;
+            
+            closeModal();
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('simulationPage').classList.remove('hidden');
+            document.getElementById('simTitle').textContent = getAlgorithmName(currentAlgorithm);
+            
+            if (currentAlgorithm.includes('priority')) {
+                document.getElementById('priorityHeader').classList.remove('hidden');
+            } else {
+                document.getElementById('priorityHeader').classList.add('hidden');
+            }
+            
+            updateDisplay();
+        }
+
+        function computeSchedule() {
+            const procs = processes.map(p => ({...p, remaining: p.burst}));
+            const schedule = [];
+            let time = 0;
+            const completed = new Set();
+            
+            switch(currentAlgorithm) {
+                case 'fcfs':
+                    procs.sort((a, b) => a.arrival - b.arrival);
+                    for (const p of procs) {
+                        if (time < p.arrival) time = p.arrival;
+                        for (let i = 0; i < p.burst; i++) {
+                            schedule.push({process: p.id, time: time++});
+                        }
+                    }
+                    break;
+                    
+                case 'sjf':
+                    while (completed.size < procs.length) {
+                        const available = procs.filter(p => p.arrival <= time && !completed.has(p.id));
+                        if (available.length === 0) {
+                            schedule.push({process: 'idle', time: time++});
+                            continue;
+                        }
+                        available.sort((a, b) => a.burst - b.burst);
+                        const selected = available[0];
+                        for (let i = 0; i < selected.burst; i++) {
+                            schedule.push({process: selected.id, time: time++});
+                        }
+                        completed.add(selected.id);
+                    }
+                    break;
+                    
+                case 'priority-np':
+                    while (completed.size < procs.length) {
+                        const available = procs.filter(p => p.arrival <= time && !completed.has(p.id));
+                        if (available.length === 0) {
+                            schedule.push({process: 'idle', time: time++});
+                            continue;
+                        }
+                        available.sort((a, b) => a.priority - b.priority);
+                        const selected = available[0];
+                        for (let i = 0; i < selected.burst; i++) {
+                            schedule.push({process: selected.id, time: time++});
+                        }
+                        completed.add(selected.id);
+                    }
+                    break;
+                    
+                case 'rr':
+                    const queue = [];
+                    let idx = 0;
+                    procs.sort((a, b) => a.arrival - b.arrival);
+                    
+                    while (completed.size < procs.length) {
+                        while (idx < procs.length && procs[idx].arrival <= time) {
+                            queue.push(procs[idx++]);
+                        }
+                        
+                        if (queue.length === 0) {
+                            schedule.push({process: 'idle', time: time++});
+                            continue;
+                        }
+                        
+                        const current = queue.shift();
+                        const executeTime = Math.min(timeQuantum, current.remaining);
+                        
+                        for (let i = 0; i < executeTime; i++) {
+                            schedule.push({process: current.id, time: time++});
+                            current.remaining--;
+                        }
+                        
+                        while (idx < procs.length && procs[idx].arrival <= time) {
+                            queue.push(procs[idx++]);
+                        }
+                        
+                        if (current.remaining > 0) {
+                            queue.push(current);
+                        } else {
+                            completed.add(current.id);
+                        }
+                    }
+                    break;
+                    
+                case 'srtf':
+                    while (completed.size < procs.length) {
+                        const available = procs.filter(p => p.arrival <= time && p.remaining > 0);
+                        if (available.length === 0) {
+                            schedule.push({process: 'idle', time: time++});
+                            continue;
+                        }
+                        available.sort((a, b) => a.remaining - b.remaining);
+                        const selected = available[0];
+                        schedule.push({process: selected.id, time: time++});
+                        selected.remaining--;
+                        if (selected.remaining === 0) completed.add(selected.id);
+                    }
+                    break;
+                    
+                case 'priority-p':
+                    while (completed.size < procs.length) {
+                        const available = procs.filter(p => p.arrival <= time && p.remaining > 0);
+                        if (available.length === 0) {
+                            schedule.push({process: 'idle', time: time++});
+                            continue;
+                        }
+                        available.sort((a, b) => a.priority - b.priority);
+                        const selected = available[0];
+                        schedule.push({process: selected.id, time: time++});
+                        selected.remaining--;
+                        if (selected.remaining === 0) completed.add(selected.id);
+                    }
+                    break;
+            }
+            
+            return schedule;
+        }
+
+        function updateDisplay() {
+            document.getElementById('currentTime').textContent = currentTick;
+            
+            // Update Gantt Chart
+            const ganttHTML = renderGanttChart();
+            document.getElementById('ganttDisplay').innerHTML = ganttHTML;
+            
+            // Update Ready Queue
+            const readyQueue = getReadyQueue();
+            document.getElementById('readyQueueDisplay').innerHTML = readyQueue;
+            
+            // Update Process Table
+            updateProcessTable();
+        }
+
+        function renderGanttChart() {
+            const displaySchedule = ganttChart.slice(0, currentTick + 1);
+            
+            if (displaySchedule.length === 0) {
+                return '<div>No processes executed yet</div>';
+            }
+            
+            const merged = [];
+            for (const item of displaySchedule) {
+                if (merged.length === 0 || merged[merged.length - 1].process !== item.process) {
+                    merged.push({process: item.process, start: item.time, end: item.time + 1});
+                } else {
+                    merged[merged.length - 1].end = item.time + 1;
+                }
+            }
+            
+            let html = '<div class="gantt-row">';
+            for (const block of merged) {
+                html += `<div class="gantt-process">${block.process}</div>`;
+            }
+            html += '</div>';
+            
+            html += '<div class="gantt-time">';
+            for (const block of merged) {
+                html += `<div class="time-marker">${block.start}</div>`;
+            }
+            html += `<div class="time-marker">${merged[merged.length - 1].end}</div>`;
+            html += '</div>';
+            
+            return html;
+        }
+
+        function getReadyQueue() {
+            const currentProcesses = processes.map(p => ({...p}));
+            
+            // Calculate remaining time based on what's been executed
+            for (let i = 0; i <= currentTick && i < ganttChart.length; i++) {
+                const executed = ganttChart[i].process;
+                const proc = currentProcesses.find(p => p.id === executed);
+                if (proc) proc.remaining--;
+            }
+            
+            const ready = currentProcesses.filter(p => 
+                p.arrival <= currentTick && p.remaining > 0
+            );
+            
+            if (ready.length === 0) {
+                return 'Ready queue empty';
+            }
+            
+            let html = '';
+            for (const p of ready) {
+                html += `<div class="queue-item">${p.id} (Arrival: ${p.arrival}ms, Remaining: ${p.remaining}ms)</div>`;
+            }
+            return html;
+        }
+
+        function updateProcessTable() {
+            const currentProcesses = processes.map(p => ({...p}));
+            
+            for (let i = 0; i <= currentTick && i < ganttChart.length; i++) {
+                const executed = ganttChart[i].process;
+                const proc = currentProcesses.find(p => p.id === executed);
+                if (proc) proc.remaining--;
+            }
+            
+            let html = '';
+            for (const p of currentProcesses) {
+                html += '<tr>';
+                html += `<td>${p.id}</td>`;
+                html += `<td>${p.arrival}</td>`;
+                html += `<td>${p.burst}</td>`;
+                if (currentAlgorithm.includes('priority')) {
+                    html += `<td>${p.priority}</td>`;
+                }
+                html += `<td>${Math.max(0, p.remaining)}</td>`;
+                html += '</tr>';
+            }
+            document.getElementById('processTableBody').innerHTML = html;
+        }
+
+        function nextTick() {
+            if (currentTick < ganttChart.length - 1) {
+                currentTick++;
+                updateDisplay();
+            }
+        }
+
+        function previousTick() {
+            if (currentTick > 0) {
+                currentTick--;
+                updateDisplay();
+            }
+        }
+
+        function togglePlayPause() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('playPauseBtn');
+            
+            if (isPlaying) {
+                btn.textContent = '⏸ Pause';
+                playInterval = setInterval(() => {
+                    if (currentTick < ganttChart.length - 1) {
+                        nextTick();
+                    } else {
+                        togglePlayPause();
+                    }
+                }, 500);
+            } else {
+                btn.textContent = '▶ Play';
+                clearInterval(playInterval);
+            }
+        }
+
+        function resetSimulation() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            document.getElementById('playPauseBtn').textContent = '▶ Play';
+            currentTick = 0;
+            updateDisplay();
+        }
+
+        function backToHome() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            document.getElementById('simulationPage').classList.add('hidden');
+            document.getElementById('homePage').classList.remove('hidden');
+        }
+
+        function showEditModal() {
+            openModal(currentAlgorithm);
+            
+            for (let i = 0; i < processes.length; i++) {
+                document.getElementById(`arrival${i}`).value = processes[i].arrival;
+                document.getElementById(`burst${i}`).value = processes[i].burst;
+                if (currentAlgorithm.includes('priority')) {
+                    document.getElementById(`priority${i}`).value = processes[i].priority;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
