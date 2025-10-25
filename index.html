@@ -149,7 +149,7 @@
         .queue-process {
             border: 1px solid #333;
             padding: 10px 15px;
-            text-align: center;
+            text-align: left;
             font-weight: bold;
             background: #f0f0f0;
         }
@@ -593,16 +593,47 @@
                 }
             }
             
-            // Build ready queue history - processes that have arrived by current time
+            // Build ready queue history - track each time a process enters/re-enters the queue
             const queueHistory = [];
-            const addedToQueue = new Set();
+            const currentlyExecuting = new Set();
             
-            // Go through time tick by tick to build the queue in order
+            // Go through the gantt chart to track queue entries
             for (let t = 0; t <= currentTick; t++) {
+                // Check for arrivals at this time
                 for (const p of currentProcesses) {
-                    if (p.arrival === t && !addedToQueue.has(p.id)) {
-                        queueHistory.push(p.id);
-                        addedToQueue.add(p.id);
+                    if (p.arrival === t) {
+                        queueHistory.push({id: p.id, entryTime: t});
+                    }
+                }
+                
+                // Check what's executing at this time
+                if (t < ganttChart.length) {
+                    const executing = ganttChart[t].process;
+                    
+                    // If something different is executing, previous process may have been preempted
+                    if (t > 0 && executing !== 'idle') {
+                        const prevExecuting = ganttChart[t - 1].process;
+                        
+                        // Check if previous process was preempted (didn't complete)
+                        if (prevExecuting !== 'idle' && prevExecuting !== executing) {
+                            const prevProc = currentProcesses.find(p => p.id === prevExecuting);
+                            // Count how much was executed up to t-1
+                            let executedSoFar = 0;
+                            for (let i = 0; i < t; i++) {
+                                if (ganttChart[i].process === prevExecuting) {
+                                    executedSoFar++;
+                                }
+                            }
+                            // If still has remaining time, it was preempted and re-enters queue
+                            if (executedSoFar < prevProc.burst) {
+                                queueHistory.push({id: prevExecuting, entryTime: t});
+                            }
+                        }
+                    }
+                    
+                    currentlyExecuting.clear();
+                    if (executing !== 'idle') {
+                        currentlyExecuting.add(executing);
                     }
                 }
             }
@@ -612,11 +643,18 @@
             }
             
             let html = '<div class="queue-row">';
-            for (const processId of queueHistory) {
-                const proc = currentProcesses.find(p => p.id === processId);
-                const hasLeft = proc.remaining <= 0;
-                const cssClass = hasLeft ? 'queue-process executed' : 'queue-process';
-                html += `<div class="${cssClass}">${processId}</div>`;
+            for (const entry of queueHistory) {
+                // Check if this entry has been picked up (executed after its entry time)
+                let hasBeenPickedUp = false;
+                for (let t = entry.entryTime; t <= currentTick && t < ganttChart.length; t++) {
+                    if (ganttChart[t].process === entry.id) {
+                        hasBeenPickedUp = true;
+                        break;
+                    }
+                }
+                
+                const cssClass = hasBeenPickedUp ? 'queue-process executed' : 'queue-process';
+                html += `<div class="${cssClass}">${entry.id}</div>`;
             }
             html += '</div>';
             return html;
